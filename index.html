@@ -14,9 +14,15 @@
 			const SCOPES = ["youtube.readonly", "youtube.force-ssl", "youtube", "youtubepartner", "youtubepartner-channel-audit"].map((scope) => AUTH_BASE_URL + scope);
 
 			let client;
+			let responseHTML;
 			let access_token = localStorage.getItem("access_token");
 
-			const showFeedback = (message) => (document.getElementById("response").innerHTML = message);
+			const echo = (message) => {
+				if (!message) return;
+				if (!responseHTML) responseHTML = document.getElementById("response");
+				responseHTML.innerHTML = message;
+				console.log(message);
+			};
 
 			function initClient() {
 				client = google.accounts.oauth2.initTokenClient({
@@ -38,11 +44,12 @@
 			}
 
 			async function requestAPI(api, parameters) {
-				showFeedback("Requesting...");
+				echo("Setting up request...");
 
 				const xhr = new XMLHttpRequest();
 				const promise = new Promise((resolve, reject) => {
 					xhr.onreadystatechange = (ev) => {
+						echo(xhr.response);
 						if (xhr.readyState == 4 && xhr.status == 200) resolve(xhr.response);
 						else if (xhr.readyState == 4) reject(xhr.response);
 					};
@@ -52,7 +59,10 @@
 					.map((key) => key + "=" + parameters[key])
 					.join("&");
 
-				xhr.open("GET", `${API_BASE_URL}/${api}?${parameters}&key=${API_KEY}`);
+				const req = `${API_BASE_URL}/${api}?${parameters}&key=${API_KEY}`;
+				echo(`Requesting ${req}...`);
+
+				xhr.open("GET", req);
 				xhr.setRequestHeader("Authorization", `Bearer ${access_token}`);
 				xhr.setRequestHeader("Accept", "application/json");
 				xhr.send();
@@ -60,41 +70,52 @@
 				return promise;
 			}
 
-			function callAPI() {
-				const apis = { plist: "playlists", ch: "channels", vids: "videos", plItems: "playlistItems" };
-				const mine = true;
-				const part = "snippet";
-				const maxResults = 25; // limit 50
-				const playlistId = "FL1RVmaIuUHdyLyI0MZ1wXRw";
+			function renderPlaylist(playlistJson) {
+				const videosHtml = document.getElementById("videos");
+				const playlist = JSON.parse(playlistJson);
 
-				requestAPI(apis.plItems, { mine, part, maxResults, playlistId })
-					.then((response) => {
-						showFeedback(response);
-						const dataJson = JSON.parse(response);
-						const videosHtml = document.getElementById("videos");
-						const itemIds = dataJson.items.map((video) => {
-							const WIDTH = 320,
-								HEIGHT = 180;
-							const snippet = video.snippet;
+				const itemIds = playlist.items.map((video) => {
+					const WIDTH = 320, HEIGHT = 180;
+					const snippet = video.snippet;
 
-							const thumbnailURL = snippet.thumbnails.medium?.url ?? "https://i.imgflip.com/4204tx.jpg";
-							const vidId = snippet.resourceId.videoId;
+					const thumbnailURL = snippet.thumbnails.medium?.url ?? "https://i.imgflip.com/4204tx.jpg";
+					const vidId = snippet.resourceId.videoId;
 
-							videosHtml.innerHTML += `
+					videosHtml.innerHTML += `
 							<div id="${vidId}">
 								<iframe style="background: url(${thumbnailURL})" width=${WIDTH} height=${HEIGHT} src=https://www.youtube.com/embed/${vidId}></iframe>
 								<p>${snippet.title}</p>
 							</div>`;
 
-							return vidId;
-						});
-						/*
-						requestAPI(apis.vids, { part: "snippet%2CcontentDetails", id: itemIds.join(",") })
-							.then((response) => showFeedback(response))
-							.catch((error) => showFeedback(error));
-						*/
-					})
-					.catch((error) => showFeedback(error));
+					return vidId;
+				});
+
+				return itemIds;
+			}
+
+			// TODO: associate vids using tags
+			function appendVideosData(videolistJson) {
+				const videolist = JSON.parse(videolistJson);
+				videolist.items.forEach((video) => {
+					const durationISO8601 = video.contentDetails.duration;
+					const regexISO8601 = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/;
+					const [, hours, minutes, seconds] = durationISO8601.match(regexISO8601);
+
+					const durationHTML = document.createElement("p");
+					durationHTML.innerHTML = `${hours ?? 0}:${minutes ?? 0}:${seconds ?? 0}`;
+					document.getElementById(video.id).appendChild(durationHTML);
+				});
+			}
+
+			async function callAPI() {
+				const apis = { plist: "playlists", ch: "channels", vids: "videos", plItems: "playlistItems" };
+				const playlistId = "FL1RVmaIuUHdyLyI0MZ1wXRw";
+
+				const playlist = await requestAPI(apis.plItems, { mine: true, part: "snippet", maxResults: 25, playlistId });
+				const videoIds = renderPlaylist(playlist).join(",");
+
+				const videolist = await requestAPI(apis.vids, { part: "contentDetails", id: videoIds });
+				appendVideosData(videolist);
 			}
 
 			function toggleResponse() {
@@ -108,7 +129,7 @@
 		<h1>Google Identity Services Authorization Token model</h1>
 		<div id="buttons">
 			<button class="g_id_signin" onclick="getToken();">Get access token</button> <br /><br />
-			<button onclick="callAPI();">Call API</button> <br /><br />
+			<button onclick="callAPI().catch(echo);">Call API</button> <br /><br />
 			<button onclick="revokeToken();">Revoke token</button>
 		</div>
 		<div id="videos"></div>
