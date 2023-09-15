@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+	<head>
+		<script src="https://accounts.google.com/gsi/client" onload="initClient()" async defer></script>
+	</head>
+	<body>
+		<script>
+			const AUTH_BASE_URL = "https://www.googleapis.com/auth/";
+			const CLIENT_ID = "213159589691-fgb3475ngni4kj55jkgur8167q2ckrqb.apps.googleusercontent.com";
+			const API_KEY = "AIzaSyA1d-fVnZ-JvDYviaRb9U_eoV4uXq6CyIU";
+
+			const SCOPES = ["youtube.readonly", "youtube.force-ssl", "youtube", "youtubepartner", "youtubepartner-channel-audit"].map((scope) => AUTH_BASE_URL + scope);
+
+			let client;
+			let access_token;
+
+			const showFeedback = (message) => (document.getElementById("response").innerHTML = message);
+
+			function initClient() {
+				client = google.accounts.oauth2.initTokenClient({
+					client_id: CLIENT_ID,
+					scope: SCOPES[0],
+					callback: (tokenResponse) => (access_token = tokenResponse.access_token),
+				});
+			}
+			function getToken() {
+				client.requestAccessToken();
+			}
+			function revokeToken() {
+				google.accounts.oauth2.revoke(access_token, () => console.log("access token revoked"));
+			}
+			function callAPI() {
+				const xhr = new XMLHttpRequest();
+				showFeedback("Loading...");
+				xhr.onreadystatechange = (ev) => {
+					if (xhr.readyState == 4 && xhr.status == 200) showFeedback(xhr.response);
+                    else if (xhr.readyState == 4) showFeedback("Error");
+				};
+				xhr.open("GET", "https://youtube.googleapis.com/youtube/v3/channels?mine=true&key=" + API_KEY);
+				xhr.setRequestHeader("Authorization", "Bearer " + access_token);
+				xhr.setRequestHeader("Accept", "application/json");
+				xhr.send();
+			}
+		</script>
+		<h1>Google Identity Services Authorization Token model</h1>
+		<button class="g_id_signin" onclick="getToken();">Get access token</button> <br /><br />
+		<button onclick="callAPI();">Call API</button> <br /><br />
+		<button onclick="revokeToken();">Revoke token</button>
+		<pre id="response"></pre>
+	</body>
+</!DOCTYPE>
