@@ -96,6 +96,14 @@
 					})
 					.catch((error) => showFeedback(error));
 			}
+
+			function toggleResponse() {
+				const responseHTML = document.getElementById("response");
+				responseHTML.hidden = !responseHTML.hidden;
+
+				const showResponseButton = document.getElementById("show-response");
+				showResponseButton.innerHTML = responseHTML.hidden ? "Show response" : "Hide response";
+			}
 		</script>
 		<h1>Google Identity Services Authorization Token model</h1>
 		<div id="buttons">
@@ -104,6 +112,7 @@
 			<button onclick="revokeToken();">Revoke token</button>
 		</div>
 		<div id="videos"></div>
-		<pre id="response"></pre>
+		<button id="show-response" onclick="toggleResponse()">Show response</button>
+		<pre hidden id="response"></pre>
 	</body>
 </html>
