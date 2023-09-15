@@ -1,17 +1,20 @@
-<!DOCTYPE html>
+<html !DOCTYPE>
 	<head>
+		<title>Google Identity Services Authorization Token model</title>
+		<link rel="stylesheet" href="style.css" />
 		<script src="https://accounts.google.com/gsi/client" onload="initClient()" async defer></script>
 	</head>
 	<body>
 		<script>
 			const AUTH_BASE_URL = "https://www.googleapis.com/auth/";
+			const API_BASE_URL = "https://youtube.googleapis.com/youtube/v3";
 			const CLIENT_ID = "213159589691-fgb3475ngni4kj55jkgur8167q2ckrqb.apps.googleusercontent.com";
 			const API_KEY = "AIzaSyA1d-fVnZ-JvDYviaRb9U_eoV4uXq6CyIU";
 
 			const SCOPES = ["youtube.readonly", "youtube.force-ssl", "youtube", "youtubepartner", "youtubepartner-channel-audit"].map((scope) => AUTH_BASE_URL + scope);
 
 			let client;
-			let access_token;
+			let access_token = localStorage.getItem("access_token");
 
 			const showFeedback = (message) => (document.getElementById("response").innerHTML = message);
 
@@ -19,32 +22,86 @@
 				client = google.accounts.oauth2.initTokenClient({
 					client_id: CLIENT_ID,
 					scope: SCOPES[0],
-					callback: (tokenResponse) => (access_token = tokenResponse.access_token),
+					callback: (tokenResponse) => {
+						access_token = tokenResponse.access_token;
+						localStorage.setItem("access_token", access_token);
+					},
 				});
 			}
 			function getToken() {
+				if (!client) initClient();
 				client.requestAccessToken();
 			}
+
 			function revokeToken() {
 				google.accounts.oauth2.revoke(access_token, () => console.log("access token revoked"));
 			}
-			function callAPI() {
+
+			async function requestAPI(api, parameters) {
+				showFeedback("Requesting...");
+
 				const xhr = new XMLHttpRequest();
-				showFeedback("Loading...");
-				xhr.onreadystatechange = (ev) => {
-					if (xhr.readyState == 4 && xhr.status == 200) showFeedback(xhr.response);
-                    else if (xhr.readyState == 4) showFeedback("Error");
-				};
-				xhr.open("GET", "https://youtube.googleapis.com/youtube/v3/channels?mine=true&key=" + API_KEY);
-				xhr.setRequestHeader("Authorization", "Bearer " + access_token);
+				const promise = new Promise((resolve, reject) => {
+					xhr.onreadystatechange = (ev) => {
+						if (xhr.readyState == 4 && xhr.status == 200) resolve(xhr.response);
+						else if (xhr.readyState == 4) reject(xhr.response);
+					};
+				});
+
+				parameters = Object.keys(parameters)
+					.map((key) => key + "=" + parameters[key])
+					.join("&");
+
+				xhr.open("GET", `${API_BASE_URL}/${api}?${parameters}&key=${API_KEY}`);
+				xhr.setRequestHeader("Authorization", `Bearer ${access_token}`);
 				xhr.setRequestHeader("Accept", "application/json");
 				xhr.send();
+
+				return promise;
+			}
+
+			function callAPI() {
+				const apis = { plist: "playlists", ch: "channels", vids: "videos", plItems: "playlistItems" };
+				const mine = true;
+				const part = "snippet";
+				const maxResults = 25; // limit 50
+				const playlistId = "FL1RVmaIuUHdyLyI0MZ1wXRw";
+
+				requestAPI(apis.plItems, { mine, part, maxResults, playlistId })
+					.then((response) => {
+						showFeedback(response);
+						const dataJson = JSON.parse(response);
+						const videosHtml = document.getElementById("videos");
+						const itemIds = dataJson.items.map((video) => {
+							const WIDTH = 320,
+								HEIGHT = 180;
+							const snippet = video.snippet;
+
+							const thumbnailURL = snippet.thumbnails.medium?.url ?? "https://i.imgflip.com/4204tx.jpg";
+							const vidId = snippet.resourceId.videoId;
+
+							videosHtml.innerHTML += `
+							<div id="${vidId}">
+								<iframe style="background: url(${thumbnailURL})" width=${WIDTH} height=${HEIGHT} src=https://www.youtube.com/embed/${vidId}></iframe>
+								<p>${snippet.title}</p>
+							</div>`;
+
+							return vidId;
+						});
+						/*
+						requestAPI(apis.vids, { part: "snippet%2CcontentDetails", id: itemIds.join(",") })
+							.then((response) => showFeedback(response))
+							.catch((error) => showFeedback(error));
+						*/
+					})
+					.catch((error) => showFeedback(error));
 			}
 		</script>
 		<h1>Google Identity Services Authorization Token model</h1>
 		<button class="g_id_signin" onclick="getToken();">Get access token</button> <br /><br />
 		<button onclick="callAPI();">Call API</button> <br /><br />
 		<button onclick="revokeToken();">Revoke token</button>
+		<div id="videos"></div>
 		<pre id="response"></pre>
 	</body>
-</!DOCTYPE>
+</html>
