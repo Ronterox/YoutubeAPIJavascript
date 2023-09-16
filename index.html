@@ -1,4 +1,5 @@
-<html !DOCTYPE>
+<!DOCTYPE html>
+<html>
 	<head>
 		<title>Google Identity Services Authorization Token model</title>
 		<link rel="stylesheet" href="style.css" />
@@ -50,7 +51,7 @@
 				const promise = new Promise((resolve, reject) => {
 					xhr.onreadystatechange = (ev) => {
 						echo(xhr.response);
-						if (xhr.readyState == 4 && xhr.status == 200) resolve(xhr.response);
+						if (xhr.readyState == 4 && xhr.status == 200) resolve(JSON.parse(xhr.response));
 						else if (xhr.readyState == 4) reject(xhr.response);
 					};
 				});
@@ -70,18 +71,17 @@
 				return promise;
 			}
 
-			function renderPlaylist(playlistJson) {
-				const videosHtml = document.getElementById("videos");
-				const playlist = JSON.parse(playlistJson);
+			function renderPlaylist(playlist) {
+				let videosRender = "";
 
 				const itemIds = playlist.items.map((video) => {
 					const WIDTH = 320, HEIGHT = 180;
 					const snippet = video.snippet;
 
 					const thumbnailURL = snippet.thumbnails.medium?.url ?? "https://i.imgflip.com/4204tx.jpg";
-					const vidId = snippet.resourceId.videoId;
+					const vidId = snippet.resourceId?.videoId ?? video.id;
 
-					videosHtml.innerHTML += `
+					videosRender += `
 							<div id="${vidId}">
 								<iframe style="background: url(${thumbnailURL})" width=${WIDTH} height=${HEIGHT} src=https://www.youtube.com/embed/${vidId}></iframe>
 								<p>${snippet.title}</p>
@@ -90,32 +90,57 @@
 					return vidId;
 				});
 
+				document.getElementById("videos").innerHTML = videosRender;
+
 				return itemIds;
 			}
 
 			// TODO: associate vids using tags
-			function appendVideosData(videolistJson) {
-				const videolist = JSON.parse(videolistJson);
+			// TODO: Next page token get all
+			// TODO: Add filtering as interactive button
+			function appendVideoData(videolist) {
 				videolist.items.forEach((video) => {
 					const durationISO8601 = video.contentDetails.duration;
 					const regexISO8601 = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/;
+
 					const [, hours, minutes, seconds] = durationISO8601.match(regexISO8601);
 
 					const durationHTML = document.createElement("p");
 					durationHTML.innerHTML = `${hours ?? 0}:${minutes ?? 0}:${seconds ?? 0}`;
+
 					document.getElementById(video.id).appendChild(durationHTML);
+
+					video.duration = { hours, minutes, seconds };
 				});
 			}
 
 			async function callAPI() {
 				const apis = { plist: "playlists", ch: "channels", vids: "videos", plItems: "playlistItems" };
-				const playlistId = "FL1RVmaIuUHdyLyI0MZ1wXRw";
+				const playlistId = "PLdQDvSzVXHR6Zx-84u5XeNvSbzwrMKrEd";
 
-				const playlist = await requestAPI(apis.plItems, { mine: true, part: "snippet", maxResults: 25, playlistId });
+				const playlist = await requestAPI(apis.plItems, { mine: true, part: "snippet", maxResults: 5, playlistId });
 				const videoIds = renderPlaylist(playlist).join(",");
 
-				const videolist = await requestAPI(apis.vids, { part: "contentDetails", id: videoIds });
-				appendVideosData(videolist);
+				const videolist = await requestAPI(apis.vids, { part: "snippet,contentDetails", id: videoIds });
+				appendVideoData(videolist);
+
+				// videolist.items = videolist.items.filter((video) => !video.duration.hours);
+
+				videolist.items.sort((a, b) => {
+					const [aHours, aMinutes, aSeconds] = Object.values(a.duration);
+					const [bHours, bMinutes, bSeconds] = Object.values(b.duration);
+
+					let diff = 0;
+
+					if (aHours !== bHours) diff = bHours - aHours;
+					if (!diff && aMinutes !== bMinutes) diff = bMinutes - aMinutes;
+					if (!diff && aSeconds !== bSeconds) diff = bSeconds - aSeconds;
+
+					return diff;
+				}).reverse();
+
+				renderPlaylist(videolist);
+				appendVideoData(videolist);
 			}
 
 			function toggleResponse() {
