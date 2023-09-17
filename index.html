@@ -100,7 +100,7 @@
 			function appendVideoData(videolist) {
 				videolist.items.forEach((video) => {
 					const durationISO8601 = video.contentDetails.duration;
-					const regexISO8601 = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/;
+					const regexISO8601 = /(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/;
 
 					const [, hours, minutes, seconds] = durationISO8601.match(regexISO8601);
 
@@ -121,7 +121,7 @@
 				const videos = [];
 				let nextPageToken;
 				do {
-					const params = { mine: true, part: "snippet", maxResults, playlistId: plIds.watchnow };
+					const params = { mine: true, part: "snippet", maxResults, playlistId: plIds.watchlist };
 					if (nextPageToken) params.pageToken = nextPageToken;
 
 					const playlist = await requestAPI(apis.plItems, params);
