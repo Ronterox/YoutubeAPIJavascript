@@ -105,7 +105,7 @@
 					const [, hours, minutes, seconds] = durationISO8601.match(regexISO8601);
 
 					const durationHTML = document.createElement("p");
-					durationHTML.innerHTML = `${hours ?? 0}:${minutes ?? 0}:${seconds ?? 0}`;
+					durationHTML.innerHTML = `${hours ?? 0}:${minutes ?? 0}:${seconds}`;
 
 					document.getElementById(video.id).appendChild(durationHTML);
 
@@ -116,8 +116,9 @@
 			async function callAPI() {
 				const apis = { plist: "playlists", ch: "channels", vids: "videos", plItems: "playlistItems" };
 				const plIds = { watchlist: "PLdQDvSzVXHR6Zx-84u5XeNvSbzwrMKrEd", watchnow: "PLdQDvSzVXHR5lyIS0HXL6lUw51etdr3nQ" };
-				const maxResults = 5;
+				const maxResults = 50;
 
+				const videos = [];
 				let nextPageToken;
 				do {
 					const params = { mine: true, part: "snippet", maxResults, playlistId: plIds.watchnow };
@@ -131,28 +132,27 @@
 					const videolist = await requestAPI(apis.vids, { part: "snippet,contentDetails", maxResults, id: videoIds });
 					appendVideoData(videolist);
 
+					videolist.items.forEach((video) => {
+						const { title } = video.snippet;
+						const { hours, minutes, seconds } = video.duration;
+
+						videos.push({ title, hours, minutes, seconds });
+					});
+
 					echo(JSON.stringify(videolist, null, 2));
 				} while (nextPageToken);
 
-				// videolist.items = videolist.items.filter((video) => !video.duration.hours);
+				videos.sort((a, b) => {
+					const aTime = a.hours ?? 0 * 3600 + a.minutes ?? 0 * 60 + a.seconds;
+					const bTime = b.hours ?? 0 * 3600 + b.minutes ?? 0 * 60 + b.seconds;
+					return aTime - bTime;
+				});
 
-				// videolist.items
-				// 	.sort((a, b) => {
-				// 		const [aHours, aMinutes, aSeconds] = Object.values(a.duration);
-				// 		const [bHours, bMinutes, bSeconds] = Object.values(b.duration);
+				const text = videos.map((video) => `[${video.hours ?? 0}:${video.minutes ?? 0}:${video.seconds}] ${video.title}`).join("\n");
 
-				// 		let diff = 0;
-
-				// 		if (aHours !== bHours) diff = bHours - aHours;
-				// 		if (!diff && aMinutes !== bMinutes) diff = bMinutes - aMinutes;
-				// 		if (!diff && aSeconds !== bSeconds) diff = bSeconds - aSeconds;
-
-				// 		return diff;
-				// 	})
-				// 	.reverse();
-
-				// renderPlaylist(videolist);
-				// appendVideoData(videolist);
+				// Save file
+				const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+				echo(`<a href="${url}" download="playlist.txt">Download playlist</a>`);
 			}
 
 			function toggleResponse() {
